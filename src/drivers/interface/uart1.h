@@ -29,32 +29,35 @@
 #include <stdbool.h>
 #include "eprintf.h"
 
-#define UART1_BAUDRATE           9600
-#define UART1_DATA_TIMEOUT_MS    1000
+#define UART1_BAUDRATE 9600
+#define UART1_DATA_TIMEOUT_MS 1000
 #define UART1_DATA_TIMEOUT_TICKS (UART1_DATA_TIMEOUT_MS / portTICK_RATE_MS)
 
-#define UART1_TYPE             USART3
-#define UART1_PERIF            RCC_APB1Periph_USART3
-#define ENABLE_UART1_RCC       RCC_APB1PeriphClockCmd
-#define UART1_IRQ              USART3_IRQn
+#define UART1_TYPE USART3
+#define UART1_PERIF RCC_APB1Periph_USART3
+#define ENABLE_UART1_RCC RCC_APB1PeriphClockCmd
+#define UART1_IRQ USART3_IRQn
 
-#define UART1_DMA_IRQ          DMA1_Stream3_IRQn
-#define UART1_DMA_IT_TC        DMA_IT_TC4
-#define UART1_DMA_STREAM       DMA1_Stream3
-#define UART1_DMA_CH           DMA_Channel_4
-#define UART1_DMA_FLAG_TCIF    DMA_FLAG_TCIF3
+#define UART1_DMA_IRQ DMA1_Stream3_IRQn
+#define UART1_DMA_IT_TC DMA_IT_TC4
+#define UART1_DMA_STREAM DMA1_Stream3
+#define UART1_DMA_CH DMA_Channel_4
+#define UART1_DMA_FLAG_TCIF DMA_FLAG_TCIF3
 
-#define UART1_GPIO_PERIF       RCC_AHB1Periph_GPIOC
-#define UART1_GPIO_PORT        GPIOC
-#define UART1_GPIO_TX_PIN      GPIO_Pin_10
-#define UART1_GPIO_RX_PIN      GPIO_Pin_11
-#define UART1_GPIO_AF_TX_PIN   GPIO_PinSource10
-#define UART1_GPIO_AF_RX_PIN   GPIO_PinSource11
-#define UART1_GPIO_AF_TX       GPIO_AF_USART3
-#define UART1_GPIO_AF_RX       GPIO_AF_USART3
+#define UART1_GPIO_PERIF RCC_AHB1Periph_GPIOC
+#define UART1_GPIO_PORT GPIOC
+#define UART1_GPIO_TX_PIN GPIO_Pin_10
+#define UART1_GPIO_RX_PIN GPIO_Pin_11
+#define UART1_GPIO_AF_TX_PIN GPIO_PinSource10
+#define UART1_GPIO_AF_RX_PIN GPIO_PinSource11
+#define UART1_GPIO_AF_TX GPIO_AF_USART3
+#define UART1_GPIO_AF_RX GPIO_AF_USART3
 
-typedef enum {
-    uart1ParityNone, uart1ParityEven, uart1ParityOdd
+typedef enum
+{
+    uart1ParityNone,
+    uart1ParityEven,
+    uart1ParityOdd
 } uart1Parity_t;
 
 /**
@@ -98,7 +101,7 @@ bool uart1GetDataWithDefaultTimeout(uint8_t *c);
  *
  * @return number of bytes read
  */
-void uart1GetBytesWithDefaultTimeout(uint32_t size, uint8_t* data);
+void uart1GetBytesWithDefaultTimeout(uint32_t size, uint8_t *data);
 
 /**
  * @brief Get the number of bytes available in the UART1 in queue
@@ -121,14 +124,14 @@ uint32_t uart1QueueMaxLength();
  * @param[in] size  Number of bytes to send
  * @param[in] data  Pointer to data
  */
-void uart1SendData(uint32_t size, uint8_t* data);
+void uart1SendData(uint32_t size, uint8_t *data);
 
 /**
  * Sends raw data using DMA transfer.
  * @param[in] size  Number of bytes to send
  * @param[in] data  Pointer to data
  */
-void uart1SendDataDmaBlocking(uint32_t size, uint8_t* data);
+void uart1SendDataDmaBlocking(uint32_t size, uint8_t *data);
 
 /**
  * Send a single character to the serial port using the uartSendData function.
@@ -138,7 +141,7 @@ void uart1SendDataDmaBlocking(uint32_t size, uint8_t* data);
  */
 int uart1Putchar(int ch);
 
-void uart1Getchar(char * ch);
+void uart1Getchar(char *ch);
 
 /**
  * Returns true if an overrun condition has happened since initialization or
@@ -155,6 +158,6 @@ bool uart1DidOverrun();
  *
  * @note If UART Crtp link is activated this function does nothing
  */
-#define uart1Printf(FMT, ...) eprintf(uart1Putchar, FMT, ## __VA_ARGS__)
+#define uart1Printf(FMT, ...) eprintf(uart1Putchar, FMT, ##__VA_ARGS__)
 
 #endif /* UART1_H_ */

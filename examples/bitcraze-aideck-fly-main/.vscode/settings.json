@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "uart_dma_pulp.h": "c",
+        "debug.h": "c",
+        "random": "c"
+    }
+}

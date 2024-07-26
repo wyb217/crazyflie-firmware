@@ -1,0 +1,4 @@
+obj-y += uart_task.o
+obj-y += uart_dma_pulp.o
+
+

@@ -25,7 +25,6 @@
  * App layer application that communicates with the GAP8 on an AI deck.
  */
 
-
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -42,31 +41,28 @@
 #include "debug.h"
 
 // Callback that is called when a CPX packet arrives
-static void cpxPacketCallback(const CPXPacket_t* cpxRx);
+static void cpxPacketCallback(const CPXPacket_t *cpxRx);
 
 static CPXPacket_t txPacket;
 
-void appMain() {
-  DEBUG_PRINT("Hello! I am the stm_gap8_cpx app\n");
+void appMain()
+{
+  DEBUG_PRINT("Hello! I am the stm_athena_cpx app\n");
 
   // Register a callback for CPX packets.
   // Packets sent to destination=CPX_T_STM32 and function=CPX_F_APP will arrive here
-  cpxRegisterAppMessageHandler(cpxPacketCallback);
 
   uint8_t counter = 0;
-  while(1) {
+  while (1)
+  {
     vTaskDelay(M2T(2000));
 
-    cpxInitRoute(CPX_T_STM32, CPX_T_GAP8, CPX_F_APP, &txPacket.route);
+    cpxInitRoute(CPX_T_STM32, CPX_T_ATHENA, CPX_F_APP, &txPacket.route);
     txPacket.data[0] = counter;
     txPacket.dataLength = 1;
 
     cpxSendPacketBlocking(&txPacket);
-    DEBUG_PRINT("Sent packet to GAP8 (%u)\n", counter);
+    DEBUG_PRINT("Sent packet to Athena (%u)\n", counter);
     counter++;
   }
-}
-
-static void cpxPacketCallback(const CPXPacket_t* cpxRx) {
-  DEBUG_PRINT("Got packet from GAP8 (%u)\n", cpxRx->data[0]);
 }
