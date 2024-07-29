@@ -1,30 +1,3 @@
-/**
- * ,---------,       ____  _ __
- * |  ,-^-,  |      / __ )(_) /_______________ _____  ___
- * | (  O  ) |     / __  / / __/ ___/ ___/ __ `/_  / / _ \
- * | / ,--´  |    / /_/ / / /_/ /__/ /  / /_/ / / /_/  __/
- *    +------`   /_____/_/\__/\___/_/   \__,_/ /___/\___/
- *
- * Crazyflie control firmware
- *
- * Copyright (C) 2023 Bitcraze AB
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, in version 3.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
- *
- * App layer application that communicates with the GAP8 on an AI deck.
- */
-
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -34,30 +7,111 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "log.h"
+#include "uart_receive.h"
 #include "uart1.h"
+#include "estimator_kalman.h"
+#include "semphr.h"
+#include "uart_syslink.h"
 
-#define DEBUG_MODULE "APP"
+#include "timers.h"
+
 #include "debug.h"
+#include "log.h"
+#include "param.h"
+
+#define DEBUG_MODULE "UARTATHENA"
+
+#define BUFFERSIZE 128
+
+struct fly_parm
+{
+    float x;
+    float y;
+    float z;
+    float yaw;
+    float pitch;
+    float roll;
+};
+
+SemaphoreHandle_t UartRxReady = NULL;
+static uint8_t Pos[6];
+static uint8_t Pos_new[6];
+static TimerHandle_t positionTimer;
+static uint8_t j = 1;
+
+void Fly_parm_update()
+{
+    // Get the logging data
+    logVarId_t idYaw = logGetVarId("stateEstimate", "yaw");
+    logVarId_t idPitch = logGetVarId("stateEstimate", "pitch");
+    logVarId_t idRoll = logGetVarId("stateEstimate", "roll");
+    logVarId_t idX = logGetVarId("stateEstimate", "x");
+    logVarId_t idY = logGetVarId("stateEstimate", "y");
+    logVarId_t idZ = logGetVarId("stateEstimate", "z");
+
+    Pos[0] = logGetFloat(idYaw);
+    Pos[1] = logGetFloat(idPitch);
+    Pos[2] = logGetFloat(idRoll);
+    Pos[3] = logGetFloat(idX);
+    Pos[4] = logGetFloat(idY);
+    Pos[5] = logGetFloat(idZ);
+
+    uart1SendData(sizeof(Pos), Pos);
+}
+
+void para_update()
+{
+    j += 6;
+    for (int i = 0; i < 6; i++)
+    {
+        Pos[i] = i + j;
+    }
+    uart1SendData(sizeof(Pos), Pos);
+}
+
+void printPara(int para)
+{
+    DEBUG_PRINT("%u \t", Pos_new[para]);
+}
+
+static void Init()
+{
+    positionTimer = xTimerCreate("positionTimer", M2T(1000), pdTRUE, (void *)0, para_update);
+    xTimerStart(positionTimer, M2T(0));
+    UartRxReady = xSemaphoreCreateMutex();
+    uart1Init(115200);
+    for (int i = 0; i < 6; i++)
+    {
+        Pos[i] = i + 1;
+    }
+    uart1SendData(sizeof(Pos), Pos);
+}
 
 void appMain()
 {
-    DEBUG_PRINT("Hello! I am the stm_athena_uart app\n");
-    uart1Init(115200);
-    uint8_t counter[2];
-    while (1)
+    // init
+    Init();
+    uint8_t index = 0;
+    for (;;)
     {
-        // 等待1秒钟
-        vTaskDelay(M2T(1000));
-        // 尝试接收2字节的数据
-        if (uart1GetDataWithDefaultTimeout(counter))
+        if (xSemaphoreTake(UartRxReady, 0) == pdPASS)
         {
-            // 打印接收到的数据
-            DEBUG_PRINT("Received data from Athena: %02x %02x\n", counter[0], counter[1]);
+            while (index < 6 && xQueueReceive(uart1queue, &Pos_new[index], 0) == pdPASS)
+            {
+                if (Pos_new[index] != 0)
+                {
+                    vTaskDelay(M2T(100));
+                    printPara(index);
+                    index++;
+                }
+            }
+            DEBUG_PRINT("\n");
+            if (index == 6)
+            {
+                // ask driver to fly
+                index = 0;
+            }
         }
-        else
-        {
-            // 如果未成功接收数据，打印错误信息
-            DEBUG_PRINT("Failed to receive data from Athena\n");
-        }
+        vTaskDelay(M2T(200));
     }
 }
