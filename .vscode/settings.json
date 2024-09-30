@@ -66,11 +66,13 @@
         "uart_receive.h": "c",
         "debug.h": "c",
         "uart1.h": "c",
-        "console.h": "c"
+        "console.h": "c",
+        "static_mem.h": "c"
     },
     "Codegeex.Chat.LanguagePreference": "中文",
     "Codegeex.Comment.LanguagePreference": "中文",
     "Codegeex.SidebarUI.LanguagePreference": "中文",
     "Codegeex.CandidateNum": "2 (中)",
-    "Codegeex.GenerationPreference": "line by line"
+    "Codegeex.GenerationPreference": "line by line",
+    "cmake.ignoreCMakeListsMissing": true
 }
