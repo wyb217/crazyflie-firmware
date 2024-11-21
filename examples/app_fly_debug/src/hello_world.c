@@ -7,7 +7,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "log.h"
-
+// #include "uart_receive.h"
 #include "uart2.h"
 #include "estimator_kalman.h"
 #include "semphr.h"
@@ -85,6 +85,93 @@ void para_init()
   memcpy(Pos, (uint8_t *)Para, 24);
 }
 
+void para_update()
+{
+  Para[0] = setpoint.velocity.x;
+  Para[1] = setpoint.velocity.y;
+  Para[2] = setpoint.position.z;
+  Para[3] = setpoint.attitudeRate.yaw;
+  uint8_t *Pos = (uint8_t *)Para;
+  uart2SendData(16, Pos);
+  // memcpy(Pos, (uint8_t *)Para, 16);
+  // Pos[16] = 0;
+  // uart2SendData(17, Pos);
+}
+
+// static void Init()
+// {
+//   // positionTimer = xTimerCreate("positionTimer", M2T(200), pdTRUE, (void*)0, parm_update);
+//   // xTimerStart(positionTimer, M2T(0));
+//   UartRxReady = xSemaphoreCreateMutex();
+//   ParaReady = xSemaphoreCreateMutex();
+//   uart2Init(115200);
+// }
+
+static void setHoverSetpoint(setpoint_t *setpoint, float vx, float vy, float z, float yawrate)
+{
+  setpoint->mode.yaw = modeVelocity;
+  setpoint->attitudeRate.yaw = yawrate;
+  setpoint->mode.x = modeVelocity;
+  setpoint->mode.y = modeVelocity;
+  setpoint->mode.z = modeAbs;
+  setpoint->position.z = z;
+  setpoint->velocity.x = vx;
+  setpoint->velocity.y = vy;
+  // setpoint->velocity.z = vz;
+  setpoint->velocity_body = true;
+  commanderSetSetpoint(setpoint, 3);
+}
+
+void take_off()
+{
+  for (int i = 0; i < 100; i++)
+  {
+    setHoverSetpoint(&setpoint, 0, 0, height, 0);
+    vTaskDelay(M2T(10));
+  }
+}
+void land()
+{
+  int i = 0;
+  float per_land = 0.05;
+  while (height - i * per_land >= 0.05f)
+  {
+    i++;
+    setHoverSetpoint(&setpoint, 0, 0, height - (float)i * per_land, 0);
+    vTaskDelay(M2T(10));
+  }
+}
+
+static void Fly()
+{
+  float para[4];
+  bool flag = 0;
+  memcpy(para, (float *)Pos_new, 16);
+  // for(int i=0;i<4;i++)
+  // {
+  //     if(para[i] != 0)
+  //     {
+  //         flag = 1;
+  //     }
+  // }
+  // if(flag == 0)
+  // {
+  //     land();
+  //     return;
+  // }
+  // for(int i=0;i < 100;i++)
+  // {
+  //     setHoverSetpoint(&setpoint, para[0], para[1], para[2], para[3]);
+  //     vTaskDelay(M2T(10));
+  // }
+  // vTaskDelay(10000);
+  // for(int i=0;i<4;i++)
+  // {
+  //     DEBUG_PRINT("%f \t", para[i]);
+  // }
+  // DEBUG_PRINT("\n");
+}
+
 void para_get()
 {
   padX = para_new[0];
@@ -95,7 +182,7 @@ void para_get()
 void appMain()
 {
   // vTaskDelay(5000);
-
+  // UartRxReady = xSemaphoreCreateMutex();
   ParaReady = xSemaphoreCreateMutex();
   uart2Init(115200);
   vTaskDelay(M2T(10000));

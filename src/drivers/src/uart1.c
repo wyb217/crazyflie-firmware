@@ -42,14 +42,16 @@
 #include "config.h"
 #include "nvicconf.h"
 #include "static_mem.h"
+#include "uart_receive.h"
 
-/** This uart is conflicting with SPI2 DMA used in sensors_bmi088_spi_bmp3xx.c
+/** This uart is conflicting with SPI2 DMA used in sensors_bmi088_spi_bmp388.c
  *  which is used in CF-Bolt. So for other products this can be enabled.
  */
-//#define ENABLE_UART1_DMA
+// #define ENABLE_UART1_DMA
 
 #define QUEUE_LENGTH 64
-static xQueueHandle uart1queue;
+xQueueHandle uart1queue;
+SemaphoreHandle_t UartRxReady;
 STATIC_MEM_QUEUE_ALLOC(uart1queue, QUEUE_LENGTH, sizeof(uint8_t));
 
 static bool isInit = false;
@@ -62,14 +64,14 @@ static xSemaphoreHandle waitUntilSendDone;
 static StaticSemaphore_t waitUntilSendDoneBuffer;
 static DMA_InitTypeDef DMA_InitStructureShare;
 static uint8_t dmaBuffer[64];
-static bool    isUartDmaInitialized;
+static bool isUartDmaInitialized;
 static uint32_t initialDMACount;
 #endif
 
 /**
-  * Configures the UART DMA. Mainly used for FreeRTOS trace
-  * data transfer.
-  */
+ * Configures the UART DMA. Mainly used for FreeRTOS trace
+ * data transfer.
+ */
 static void uart1DmaInit(void)
 {
 #ifdef ENABLE_UART1_DMA
@@ -77,8 +79,8 @@ static void uart1DmaInit(void)
 
   // initialize the FreeRTOS structures first, to prevent null pointers in interrupts
   waitUntilSendDone = xSemaphoreCreateBinaryStatic(&waitUntilSendDoneBuffer); // initialized as blocking
-  uartBusy = xSemaphoreCreateBinaryStatic(&uartBusyBuffer); // initialized as blocking
-  xSemaphoreGive(uartBusy); // but we give it because the uart isn't busy at initialization
+  uartBusy = xSemaphoreCreateBinaryStatic(&uartBusyBuffer);                   // initialized as blocking
+  xSemaphoreGive(uartBusy);                                                   // but we give it because the uart isn't busy at initialization
 
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA1, ENABLE);
 
@@ -96,7 +98,7 @@ static void uart1DmaInit(void)
   DMA_InitStructureShare.DMA_Mode = DMA_Mode_Normal;
   DMA_InitStructureShare.DMA_Priority = DMA_Priority_Low;
   DMA_InitStructureShare.DMA_FIFOMode = DMA_FIFOMode_Disable;
-  DMA_InitStructureShare.DMA_FIFOThreshold = DMA_FIFOThreshold_1QuarterFull ;
+  DMA_InitStructureShare.DMA_FIFOThreshold = DMA_FIFOThreshold_1QuarterFull;
   DMA_InitStructureShare.DMA_Channel = UART1_DMA_CH;
 
   NVIC_InitStructure.NVIC_IRQChannel = UART1_DMA_IRQ;
@@ -109,7 +111,8 @@ static void uart1DmaInit(void)
 #endif
 }
 
-void uart1Init(const uint32_t baudrate) {
+void uart1Init(const uint32_t baudrate)
+{
   uart1InitWithParity(baudrate, uart1ParityNone);
 }
 
@@ -125,38 +128,46 @@ void uart1InitWithParity(const uint32_t baudrate, const uart1Parity_t parity)
   ENABLE_UART1_RCC(UART1_PERIF, ENABLE);
 
   /* Configure USART Rx as input floating */
-  GPIO_InitStructure.GPIO_Pin   = UART1_GPIO_RX_PIN;
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_Pin = UART1_GPIO_RX_PIN;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
   GPIO_Init(UART1_GPIO_PORT, &GPIO_InitStructure);
 
   /* Configure USART Tx as alternate function */
-  GPIO_InitStructure.GPIO_Pin   = UART1_GPIO_TX_PIN;
+  GPIO_InitStructure.GPIO_Pin = UART1_GPIO_TX_PIN;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_Init(UART1_GPIO_PORT, &GPIO_InitStructure);
 
-  //Map uart to alternate functions
+  // Map uart to alternate functions
   GPIO_PinAFConfig(UART1_GPIO_PORT, UART1_GPIO_AF_TX_PIN, UART1_GPIO_AF_TX);
   GPIO_PinAFConfig(UART1_GPIO_PORT, UART1_GPIO_AF_RX_PIN, UART1_GPIO_AF_RX);
 
-  USART_InitStructure.USART_BaudRate            = baudrate;
-  USART_InitStructure.USART_Mode                = USART_Mode_Rx | USART_Mode_Tx;
-  if (parity == uart1ParityEven || parity == uart1ParityOdd) {
-    USART_InitStructure.USART_WordLength        = USART_WordLength_9b;
-  } else {
-    USART_InitStructure.USART_WordLength        = USART_WordLength_8b;
+  USART_InitStructure.USART_BaudRate = baudrate;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+  if (parity == uart1ParityEven || parity == uart1ParityOdd)
+  {
+    USART_InitStructure.USART_WordLength = USART_WordLength_9b;
+  }
+  else
+  {
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
   }
 
-  USART_InitStructure.USART_StopBits            = USART_StopBits_1;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
 
-  if (parity == uart1ParityEven) {
-    USART_InitStructure.USART_Parity            = USART_Parity_Even;
-  } else if (parity == uart1ParityOdd) {
-    USART_InitStructure.USART_Parity            = USART_Parity_Odd;
-  } else {
-    USART_InitStructure.USART_Parity            = USART_Parity_No;
+  if (parity == uart1ParityEven)
+  {
+    USART_InitStructure.USART_Parity = USART_Parity_Even;
+  }
+  else if (parity == uart1ParityOdd)
+  {
+    USART_InitStructure.USART_Parity = USART_Parity_Odd;
+  }
+  else
+  {
+    USART_InitStructure.USART_Parity = USART_Parity_No;
   }
 
   USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
@@ -174,7 +185,7 @@ void uart1InitWithParity(const uint32_t baudrate, const uart1Parity_t parity)
 
   USART_ITConfig(UART1_TYPE, USART_IT_RXNE, ENABLE);
 
-  //Enable UART
+  // Enable UART
   USART_Cmd(UART1_TYPE, ENABLE);
 
   USART_ITConfig(UART1_TYPE, USART_IT_RXNE, ENABLE);
@@ -203,36 +214,39 @@ bool uart1GetDataWithDefaultTimeout(uint8_t *c)
   return uart1GetDataWithTimeout(c, UART1_DATA_TIMEOUT_TICKS);
 }
 
-void uart1GetBytesWithDefaultTimeout(uint32_t size, uint8_t* data)
+void uart1GetBytesWithDefaultTimeout(uint32_t size, uint8_t *data)
 {
-  for (size_t i = 0; i < size; i++) {
+  for (size_t i = 0; i < size; i++)
+  {
     xQueueReceive(uart1queue, &data[i], portMAX_DELAY);
   }
 }
 
-void uart1SendData(uint32_t size, uint8_t* data)
+void uart1SendData(uint32_t size, uint8_t *data)
 {
   uint32_t i;
 
   if (!isInit)
     return;
 
-  for(i = 0; i < size; i++)
+  for (i = 0; i < size; i++)
   {
-    while (!(UART1_TYPE->SR & USART_FLAG_TXE));
+    while (!(UART1_TYPE->SR & USART_FLAG_TXE))
+      ;
     UART1_TYPE->DR = (data[i] & 0x00FF);
   }
 }
 
 #ifdef ENABLE_UART1_DMA
-void uart1SendDataDmaBlocking(uint32_t size, uint8_t* data)
+void uart1SendDataDmaBlocking(uint32_t size, uint8_t *data)
 {
   if (isUartDmaInitialized)
   {
     xSemaphoreTake(uartBusy, portMAX_DELAY);
     // Wait for DMA to be free
-    while(DMA_GetCmdStatus(UART1_DMA_STREAM) != DISABLE);
-    //Copy data in DMA buffer
+    while (DMA_GetCmdStatus(UART1_DMA_STREAM) != DISABLE)
+      ;
+    // Copy data in DMA buffer
     memcpy(dmaBuffer, data, size);
     DMA_InitStructureShare.DMA_BufferSize = size;
     initialDMACount = size;
@@ -254,12 +268,12 @@ void uart1SendDataDmaBlocking(uint32_t size, uint8_t* data)
 
 int uart1Putchar(int ch)
 {
-    uart1SendData(1, (uint8_t *)&ch);
+  uart1SendData(1, (uint8_t *)&ch);
 
-    return (unsigned char)ch;
+  return (unsigned char)ch;
 }
 
-void uart1Getchar(char * ch)
+void uart1Getchar(char *ch)
 {
   xQueueReceive(uart1queue, ch, portMAX_DELAY);
 }
@@ -300,20 +314,29 @@ void __attribute__((used)) DMA1_Stream3_IRQHandler(void)
 
 void __attribute__((used)) USART3_IRQHandler(void)
 {
+  // static uint8_t count = 0;
   if (USART_GetITStatus(UART1_TYPE, USART_IT_RXNE))
   {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     uint8_t rxData = USART_ReceiveData(UART1_TYPE) & 0x00FF;
     xQueueSendFromISR(uart1queue, &rxData, &xHigherPriorityTaskWoken);
+    // count++;
+    // if(rxData == '\n' || count >= 16)
+    // {
+    //   count = 0;
+    //   UartRxCallback();
+    // }
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-  } else {
+  }
+  else
+  {
     /** if we get here, the error is most likely caused by an overrun!
      * - PE (Parity error), FE (Framing error), NE (Noise error), ORE (OverRun error)
      * - and IDLE (Idle line detected) pending bits are cleared by software sequence:
      * - reading USART_SR register followed reading the USART_DR register.
      */
-    asm volatile ("" : "=m" (UART1_TYPE->SR) : "r" (UART1_TYPE->SR)); // force non-optimizable reads
-    asm volatile ("" : "=m" (UART1_TYPE->DR) : "r" (UART1_TYPE->DR)); // of these two registers
+    asm volatile("" : "=m"(UART1_TYPE->SR) : "r"(UART1_TYPE->SR)); // force non-optimizable reads
+    asm volatile("" : "=m"(UART1_TYPE->DR) : "r"(UART1_TYPE->DR)); // of these two registers
 
     hasOverrun = true;
   }

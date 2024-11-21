@@ -29,15 +29,17 @@
 
 #define CPX_VERSION (0b00)
 
-// This enum is used to identify source and destination for CPX routing information
-typedef enum {
-  CPX_T_STM32 = 1, // The STM in the Crazyflie
-  CPX_T_ESP32 = 2, // The ESP on the AI-deck
-  CPX_T_WIFI_HOST = 3,  // A remote computer connected via Wifi
-  CPX_T_GAP8 = 4   // The GAP8 on the AI-deck
+typedef enum
+{
+  CPX_T_STM32 = 1,
+  CPX_T_WIFI_HOST = 3,
+  CPX_T_ESP32 = 2,
+  CPX_T_GAP8 = 4,
+  CPX_T_ATHENA = 5
 } CPXTarget_t;
 
-typedef enum {
+typedef enum
+{
   CPX_F_SYSTEM = 1,
   CPX_F_CONSOLE = 2,
   CPX_F_CRTP = 3,
@@ -48,7 +50,8 @@ typedef enum {
   CPX_F_LAST // NEEDS TO BE LAST
 } CPXFunction_t;
 
-typedef struct {
+typedef struct
+{
   CPXTarget_t destination;
   CPXTarget_t source;
   bool lastPacket;
@@ -59,7 +62,8 @@ typedef struct {
 // This struct contains routing information in a packed format. This struct
 // should mainly be used to serialize data when tranferring. Unpacked formats
 // should be preferred in application code.
-typedef struct {
+typedef struct
+{
   CPXTarget_t destination : 3;
   CPXTarget_t source : 3;
   bool lastPacket : 1;
@@ -73,30 +77,33 @@ typedef struct {
 // The maximum MTU of any link
 #define CPX_MAX_PAYLOAD_SIZE 100
 
-typedef struct {
-    uint16_t wireLength;
-    CPXRoutingPacked_t route;
-    uint8_t data[CPX_MAX_PAYLOAD_SIZE - CPX_HEADER_SIZE];
+typedef struct
+{
+  uint16_t wireLength;
+  CPXRoutingPacked_t route;
+  uint8_t data[CPX_MAX_PAYLOAD_SIZE - CPX_HEADER_SIZE];
 } __attribute__((packed)) CPXPacketPacked_t;
 
 #define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
 
-typedef struct {
+typedef struct
+{
   CPXRouting_t route;
   uint16_t dataLength;
   uint8_t data[CPX_MAX_PAYLOAD_SIZE];
 } CPXPacket_t;
 
-typedef struct {
+typedef struct
+{
   CPXRouting_t route;
 
   uint16_t dataLength;
   uint8_t data[CPX_MAX_PAYLOAD_SIZE - CPX_ROUTING_PACKED_SIZE];
 } CPXRoutablePacket_t;
 
-typedef void (*cpxAppMessageHandlerCallback_t)(const CPXPacket_t* cpxRx);
+typedef void (*cpxAppMessageHandlerCallback_t)(const CPXPacket_t *cpxRx);
 
-void cpxInitRoute(const CPXTarget_t source, const CPXTarget_t destination, const CPXFunction_t function, CPXRouting_t* route);
+void cpxInitRoute(const CPXTarget_t source, const CPXTarget_t destination, const CPXFunction_t function, CPXRouting_t *route);
 
 void cpxInit();
 
