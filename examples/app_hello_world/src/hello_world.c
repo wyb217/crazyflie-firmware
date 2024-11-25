@@ -51,6 +51,9 @@ static void init()
   cpxExternalRouterInit();
   cpxInit();
 }
+
+
+
 void appMain()
 {
   init();
