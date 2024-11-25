@@ -1,34 +1,80 @@
-#include "cpx_temp_tool.h"
-#define DEBUG_MODULE "ATHENA"
+/**
+ * ,---------,       ____  _ __
+ * |  ,-^-,  |      / __ )(_) /_______________ _____  ___
+ * | (  O  ) |     / __  / / __/ ___/ ___/ __ `/_  / / _ \
+ * | / ,--´  |    / /_/ / / /_/ /__/ /  / /_/ / / /_/  __/
+ *    +------`   /_____/_/\__/\___/_/   \__,_/ /___/\___/
+ *
+ * Crazyflie control firmware
+ *
+ * Copyright (C) 2023 Bitcraze AB
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, in version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * App layer application that communicates with the GAP8 on an AI deck.
+ */
 
-static CPXPacket_t rxPacket;
-static uint8_t rxBuffer[CPX_MAX_PAYLOAD_SIZE + CPX_HEADER_SIZE + 2]; // 包含包头和包尾
-SemaphoreHandle_t UartRxReady = NULL;
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 
+#include "app.h"
+
+#include "cpx.h"
+#include "cpx_internal_router.h"
+#include "cpx_external_router.h"
+#include "cpx_uart_transport.h"
+#include "FreeRTOS.h"
+#include "task.h"
+
+#define DEBUG_MODULE "APP"
+#include "debug.h"
+
+// Callback that is called when a CPX packet arrives
+static void cpxPacketCallback(const CPXPacket_t *cpxRx);
+
+static void init()
+{
+  cpxUARTTransportInit();
+  cpxInternalRouterInit();
+  cpxExternalRouterInit();
+  cpxInit();
+}
 void appMain()
 {
+  init();
   DEBUG_PRINT("Hello! I am the stm_athena_cpx app\n");
-  uart2Init(115200);
+
+  // Register a callback for CPX packets.
+  // Packets sent to destination=CPX_T_STM32 and function=CPX_F_APP will arrive here
+  cpxRegisterAppMessageHandler(cpxPacketCallback);
 
   while (1)
   {
-    uint32_t receivedLength = receiveData(rxBuffer, sizeof(rxBuffer));
-    if (receivedLength >= CPX_HEADER_SIZE + 2)
-    {
-      // 解包
-      parseCPXPacket(&rxPacket, rxBuffer, receivedLength);
-      DEBUG_PRINT("Received CPX data from Athena: ");
-      for (int i = 0; i < rxPacket.dataLength; i++)
-      {
-        DEBUG_PRINT("%u\t", rxPacket.data[i]);
-      }
-      DEBUG_PRINT("\n");
-    }
-    else
-    {
-      DEBUG_PRINT("Error: Received data length too short\n");
-    }
+    vTaskDelay(M2T(2000));
 
-    vTaskDelay(M2T(1));
+    // cpxInitRoute(CPX_T_STM32, CPX_T_ATHENA, CPX_F_APP, &txPacket.route);
+    // txPacket.data[0] = counter;
+    // txPacket.dataLength = 1;
+
+    // cpxSendPacketBlocking(&txPacket);
+    // DEBUG_PRINT("Sent packet to Athena (%u)\n", counter);
+    // counter++;
   }
+}
+
+static void cpxPacketCallback(const CPXPacket_t *cpxRx)
+{
+  DEBUG_PRINT("Got packet from Athena (%u)\n", cpxRx->data[0]);
 }
