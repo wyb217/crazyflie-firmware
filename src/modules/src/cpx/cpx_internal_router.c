@@ -38,65 +38,81 @@
 #define QUEUE_LENGTH (2)
 
 static xQueueHandle crtpQueue;
-static xQueueHandle mixedQueue;
+xQueueHandle mixedQueue;
 
 static xQueueHandle txq;
 
-int cpxInternalRouterReceiveCRTP(CPXPacket_t * packet) {
+int cpxInternalRouterReceiveCRTP(CPXPacket_t *packet)
+{
   return xQueueReceive(crtpQueue, packet, M2T(100));
 }
 
-void cpxInternalRouterReceiveOthers(CPXPacket_t * packet) {
+void cpxInternalRouterReceiveOthers(CPXPacket_t *packet)
+{
   xQueueReceive(mixedQueue, packet, (TickType_t)portMAX_DELAY);
 }
 
-void cpxSendPacketBlocking(const CPXPacket_t * packet) {
-  if (cpxCheckVersion(packet->route.version)) {
+void cpxSendPacketBlocking(const CPXPacket_t *packet)
+{
+  if (cpxCheckVersion(packet->route.version))
+  {
     xQueueSend(txq, packet, portMAX_DELAY);
   }
 }
 
-bool cpxSendPacketBlockingTimeout(const CPXPacket_t * packet, const uint32_t timeout) {
-  if (cpxCheckVersion(packet->route.version)) {
+bool cpxSendPacketBlockingTimeout(const CPXPacket_t *packet, const uint32_t timeout)
+{
+  if (cpxCheckVersion(packet->route.version))
+  {
     return xQueueSend(txq, packet, timeout) == pdTRUE;
-  } else {
+  }
+  else
+  {
     return pdTRUE;
   }
 }
 
-bool cpxSendPacket(const CPXPacket_t * packet, uint32_t timeout) {
+bool cpxSendPacket(const CPXPacket_t *packet, uint32_t timeout)
+{
   return true;
 }
 
-void cpxInternalRouterRouteIn(const CPXRoutablePacket_t* packet) {
+void cpxInternalRouterRouteIn(const CPXRoutablePacket_t *packet)
+{
   // this should never fail, as it should be checked when the packet is received
   // however, double checking doesn't harm
-  if (cpxCheckVersion(packet->route.version)) {
-    switch (packet->route.function) {
-      case CPX_F_SYSTEM:
-      case CPX_F_CONSOLE:
-      case CPX_F_WIFI_CTRL:
-      case CPX_F_BOOTLOADER:
-      case CPX_F_APP:
-      case CPX_F_TEST:
-        xQueueSend(mixedQueue, packet, portMAX_DELAY);
-        break;
-      case CPX_F_CRTP:
-        xQueueSend(crtpQueue, packet, portMAX_DELAY);
-        break;
-      default:
-        DEBUG_PRINT("Message on function which is not handled (0x%X)\n", packet->route.function);
+  if (cpxCheckVersion(packet->route.version))
+  {
+    switch (packet->route.function)
+    {
+    case CPX_F_SYSTEM:
+    case CPX_F_CONSOLE:
+    case CPX_F_WIFI_CTRL:
+    case CPX_F_BOOTLOADER:
+    case CPX_F_APP:
+    case CPX_F_TEST:
+      xQueueSend(mixedQueue, packet, portMAX_DELAY);
+      break;
+    case CPX_F_CRTP:
+      xQueueSend(crtpQueue, packet, portMAX_DELAY);
+      break;
+    default:
+      DEBUG_PRINT("Message on function which is not handled (0x%X)\n", packet->route.function);
     }
   }
 }
 
 // Route from STM to external targets
-void cpxInternalRouterRouteOut(CPXRoutablePacket_t* packet) {
+void cpxInternalRouterRouteOut(CPXRoutablePacket_t *packet)
+{
   xQueueReceive(txq, packet, (TickType_t)portMAX_DELAY);
 }
 
-void cpxInternalRouterInit(void) {
+void cpxInternalRouterInit(void)
+{
   txq = xQueueCreate(QUEUE_LENGTH, sizeof(CPXPacket_t));
-  crtpQueue = xQueueCreate(QUEUE_LENGTH, sizeof(CPXPacket_t));;
-  mixedQueue = xQueueCreate(QUEUE_LENGTH, sizeof(CPXPacket_t));;
+  crtpQueue = xQueueCreate(QUEUE_LENGTH, sizeof(CPXPacket_t));
+  ;
+  mixedQueue = xQueueCreate(QUEUE_LENGTH, sizeof(CPXPacket_t));
+  ;
 }

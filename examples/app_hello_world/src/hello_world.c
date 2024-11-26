@@ -37,13 +37,20 @@
 #include "cpx_uart_transport.h"
 #include "FreeRTOS.h"
 #include "task.h"
-
+#include "queue.h"
+#include "uart2.h"
 #define DEBUG_MODULE "APP"
 #include "debug.h"
+typedef struct
+{
+  CPXRoutablePacket_t txp;
+} RouteContext_t;
 
+extern xQueueHandle mixedQueue;
 // Callback that is called when a CPX packet arrives
 static void cpxPacketCallback(const CPXPacket_t *cpxRx);
-
+uint8_t *rxbuffer;
+CPXRoutablePacket_t rxPacket;
 static void init()
 {
   cpxUARTTransportInit();
@@ -52,7 +59,41 @@ static void init()
   cpxInit();
 }
 
+void parseCPXPacket(CPXRoutablePacket_t *rxPacket, uint8_t *rxBuffer)
+{
+  uint16_t length = 0;
+  memcpy(&length, rxBuffer, 2);
+  rxPacket->dataLength = length - CPX_HEADER_SIZE;
+  DEBUG_PRINT("rxPacket->dataLength: %d\n", rxPacket->dataLength);
+  rxPacket->route.destination = (rxBuffer[2] >> 5) & 0x07;
+  rxPacket->route.source = (rxBuffer[2] >> 2) & 0x07;
+  rxPacket->route.lastPacket = (rxBuffer[2] >> 1) & 0x01;
+  rxPacket->route.function = (rxBuffer[3] >> 2) & 0x3F;
+  rxPacket->route.version = rxBuffer[3] & 0x03;
+  // 复制数据到 CPX 数据包
+  memcpy(rxPacket->data, rxBuffer + 4, rxPacket->dataLength);
+  xQueueSend(mixedQueue, rxPacket, portMAX_DELAY);
+}
 
+void receiveData(uint8_t *buffer, uint32_t maxLength)
+{
+  uint16_t totalReceived = 0;
+  uint8_t byte;
+
+  // 循环接收数据，直到接收到完整的 CPX 数据包
+  while (totalReceived < maxLength)
+  {
+    if (uart2GetDataWithTimeout(1, &byte, M2T(1000)))
+    {
+      buffer[totalReceived++] = byte;
+    }
+    else
+    {
+      // 接收完就停止接收
+      break;
+    }
+  }
+}
 
 void appMain()
 {
@@ -66,7 +107,8 @@ void appMain()
   while (1)
   {
     vTaskDelay(M2T(2000));
-
+    receiveData(rxbuffer, CPX_MAX_PAYLOAD_SIZE);
+    parseCPXPacket(&rxPacket, rxbuffer);
     // cpxInitRoute(CPX_T_STM32, CPX_T_ATHENA, CPX_F_APP, &txPacket.route);
     // txPacket.data[0] = counter;
     // txPacket.dataLength = 1;
