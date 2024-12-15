@@ -49,28 +49,30 @@ static CPXPacket_t cpxRx;
 
 static volatile cpxAppMessageHandlerCallback_t appMessageHandlerCallback;
 
-#define WIFI_SET_SSID_CMD         0x10
-#define WIFI_SET_KEY_CMD          0x11
+#define WIFI_SET_SSID_CMD 0x10
+#define WIFI_SET_KEY_CMD 0x11
 
-#define WIFI_CONNECT_CMD          0x20
-#define WIFI_CONNECT_AS_AP        0x01
-#define WIFI_CONNECT_AS_STA       0x00
-#define WIFI_CONNECT_AS_LENGTH    2
+#define WIFI_CONNECT_CMD 0x20
+#define WIFI_CONNECT_AS_AP 0x01
+#define WIFI_CONNECT_AS_STA 0x00
+#define WIFI_CONNECT_AS_LENGTH 2
 
-#define WIFI_AP_CONNECTED_CMD     0x31
+#define WIFI_AP_CONNECTED_CMD 0x31
 #define WIFI_CLIENT_CONNECTED_CMD 0x32
 
-#define CPX_ENABLE_CRTP_BRIDGE    0x21
-#define CPX_SET_CLIENT_CONNECTED  0x20
+#define CPX_ENABLE_CRTP_BRIDGE 0x21
+#define CPX_SET_CLIENT_CONNECTED 0x20
 
-void cpxInitRoute(const CPXTarget_t source, const CPXTarget_t destination, const CPXFunction_t function, CPXRouting_t* route) {
-    route->source = source;
-    route->destination = destination;
-    route->function = function;
-    route->version = CPX_VERSION;
+void cpxInitRoute(const CPXTarget_t source, const CPXTarget_t destination, const CPXFunction_t function, CPXRouting_t *route)
+{
+  route->source = source;
+  route->destination = destination;
+  route->function = function;
+  route->version = CPX_VERSION;
 }
 
-bool cpxCheckVersion(const uint8_t version) {
+bool cpxCheckVersion(const uint8_t version)
+{
   static bool hasLoggedVersionMismatch = false;
 
   // Version mismatch is generally handled by ignoring messages and logging the problem once.
@@ -78,8 +80,10 @@ bool cpxCheckVersion(const uint8_t version) {
 
   const bool isVersionOk = (version == CPX_VERSION);
 
-  if (!isVersionOk) {
-    if (!hasLoggedVersionMismatch) {
+  if (!isVersionOk)
+  {
+    if (!hasLoggedVersionMismatch)
+    {
       DEBUG_PRINT("WARNING! CPX version mismatch. Got %i, require %i\n", version, CPX_VERSION);
       hasLoggedVersionMismatch = true;
     }
@@ -88,80 +92,105 @@ bool cpxCheckVersion(const uint8_t version) {
   return isVersionOk;
 }
 
-void cpxRegisterAppMessageHandler(cpxAppMessageHandlerCallback_t callback) {
+void cpxRegisterAppMessageHandler(cpxAppMessageHandlerCallback_t callback)
+{
   appMessageHandlerCallback = callback;
 }
 
-static void cpx(void* _param) {
+static void cpx(void *_param)
+{
   systemWaitStart();
-  while (1) {
+  while (1)
+  {
     cpxInternalRouterReceiveOthers(&cpxRx);
 
-    //DEBUG_PRINT("CPX RX: Message from [0x%02X] to function [0x%02X] (size=%u)\n", cpxRx.route.source, cpxRx.route.function, cpxRx.dataLength);
+    // DEBUG_PRINT("CPX RX: Message from [0x%02X] to function [0x%02X] (size=%u)\n", cpxRx.route.source, cpxRx.route.function, cpxRx.dataLength);
 
-    switch (cpxRx.route.function) {
-      case CPX_F_WIFI_CTRL:
-        if (cpxRx.data[0] == WIFI_AP_CONNECTED_CMD) {
-            DEBUG_PRINT("WiFi connected to ip: %u.%u.%u.%u\n",
-                        cpxRx.data[1],
-                        cpxRx.data[2],
-                        cpxRx.data[3],
-                        cpxRx.data[4]);
+    switch (cpxRx.route.function)
+    {
+    case CPX_F_WIFI_CTRL:
+      if (cpxRx.data[0] == WIFI_AP_CONNECTED_CMD)
+      {
+        DEBUG_PRINT("WiFi connected to ip: %u.%u.%u.%u\n",
+                    cpxRx.data[1],
+                    cpxRx.data[2],
+                    cpxRx.data[3],
+                    cpxRx.data[4]);
+      }
+      if (cpxRx.data[0] == WIFI_CLIENT_CONNECTED_CMD)
+      {
+        if (cpxRx.data[1] == 0x00)
+        {
+          cpxLinkSetConnected(false);
+          DEBUG_PRINT("CPX disconnected\n");
         }
-        if (cpxRx.data[0] == WIFI_CLIENT_CONNECTED_CMD) {
-          if (cpxRx.data[1] == 0x00) {
-            cpxLinkSetConnected(false);
-            DEBUG_PRINT("CPX disconnected\n");
-          } else {
-            cpxLinkSetConnected(true);
-            DEBUG_PRINT("CPX connected\n");
-          }
+        else
+        {
+          cpxLinkSetConnected(true);
+          DEBUG_PRINT("CPX connected\n");
         }
-        break;
-      case CPX_F_CONSOLE:
-        if (cpxRx.route.source == CPX_T_ESP32) {
-          DEBUG_PRINT("ESP32: %s", cpxRx.data);
-        } else if (cpxRx.route.source == CPX_T_GAP8) {
-          DEBUG_PRINT("GAP8: %s", cpxRx.data);
-        } else {
-          DEBUG_PRINT("UNKNOWN: %s", cpxRx.data);
-        }
-        break;
-      case CPX_F_BOOTLOADER:
+      }
+      break;
+    case CPX_F_CONSOLE:
+      if (cpxRx.route.source == CPX_T_ESP32)
+      {
+        DEBUG_PRINT("ESP32: %s", cpxRx.data);
+      }
+      else if (cpxRx.route.source == CPX_T_GAP8)
+      {
+        DEBUG_PRINT("GAP8: %s", cpxRx.data);
+      }
+      else
+      {
+        DEBUG_PRINT("UNKNOWN: %s", cpxRx.data);
+      }
+      break;
+    case CPX_F_BOOTLOADER:
 #ifdef CONFIG_DECK_AI
-        cpxBootloaderMessage(&cpxRx);
+      cpxBootloaderMessage(&cpxRx);
 #endif
-        break;
-      case CPX_F_SYSTEM:
-        if (cpxRx.data[0] == CPX_ENABLE_CRTP_BRIDGE) {
-          if (cpxRx.data[1] == 0x00) {
-            crtpSetLink(radiolinkGetLink());
-            DEBUG_PRINT("Disable CPX <> CRTP bridge\n");
-          } else {
-            crtpSetLink(cpxlinkGetLink());
-            DEBUG_PRINT("Enable CPX <> CRTP bridge\n");
-          }
+      break;
+    case CPX_F_SYSTEM:
+      if (cpxRx.data[0] == CPX_ENABLE_CRTP_BRIDGE)
+      {
+        if (cpxRx.data[1] == 0x00)
+        {
+          crtpSetLink(radiolinkGetLink());
+          DEBUG_PRINT("Disable CPX <> CRTP bridge\n");
         }
+        else
+        {
+          crtpSetLink(cpxlinkGetLink());
+          DEBUG_PRINT("Enable CPX <> CRTP bridge\n");
+        }
+      }
 
-        if (cpxRx.data[0] == CPX_SET_CLIENT_CONNECTED) {
-          if (cpxRx.data[1] == 0x00) {
-            cpxLinkSetConnected(false);
-          } else {
-            cpxLinkSetConnected(true);
-          }
+      if (cpxRx.data[0] == CPX_SET_CLIENT_CONNECTED)
+      {
+        if (cpxRx.data[1] == 0x00)
+        {
+          cpxLinkSetConnected(false);
         }
-        break;
-      case CPX_F_APP:
-        if (appMessageHandlerCallback) {
-          appMessageHandlerCallback(&cpxRx);
+        else
+        {
+          cpxLinkSetConnected(true);
         }
-        break;
-      default:
-        DEBUG_PRINT("Not handling function [0x%02X] from [0x%02X]\n", cpxRx.route.function, cpxRx.route.source);
+      }
+      break;
+    case CPX_F_APP:
+      if (appMessageHandlerCallback)
+      {
+        appMessageHandlerCallback(&cpxRx);
+      }
+      break;
+    default:
+      DEBUG_PRINT("Not handling function [0x%02X] from [0x%02X]\n", cpxRx.route.function, cpxRx.route.source);
     }
   }
 }
 
-void cpxInit() {
+void cpxInit()
+{
   xTaskCreate(cpx, CPX_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL, AI_DECK_TASK_PRI, NULL);
+  DEBUG_PRINT("cpx init");
 }

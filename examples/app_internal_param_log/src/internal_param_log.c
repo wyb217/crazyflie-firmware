@@ -23,9 +23,8 @@
  *
  *
  * internal_log_param_api.c - App layer application of the internal log
- *  and param api  
+ *  and param api
  */
-
 
 #include <string.h>
 #include <stdint.h>
@@ -37,7 +36,7 @@
 #include "task.h"
 
 #include "debug.h"
-
+#include "uart2.h"
 #include "log.h"
 #include "param.h"
 
@@ -45,28 +44,12 @@
 
 void appMain()
 {
-  DEBUG_PRINT("This is the App layer example of the internal log param api...\n");
-  logVarId_t idYaw = logGetVarId("stateEstimate", "yaw");
-  float yaw = 0.0f;
-
-  paramVarId_t idEstimator = paramGetVarId("stabilizer", "estimator");
-  uint8_t estimator_type = 0;
-
-  while(1) {
+  uart2Init(115200);
+  uint8_t ctr[] = {0xFF, 0x00, 0x01};
+  while (1)
+  {
     vTaskDelay(M2T(2000));
 
-    // Get the logging data
-    yaw = logGetFloat(idYaw);
-    DEBUG_PRINT("Yaw is now: %f deg\n", (double)yaw);
-
-    // Get parameter value
-    estimator_type = paramGetInt(idEstimator);
-    DEBUG_PRINT("Estimator type is now: %d deg\n", estimator_type);
-
-    // Set a parameter value 
-    //  Note, this will influence the flight quality if you change estimator
-    uint8_t new_value = 2;
-    paramSetInt(idEstimator, new_value);
-    
+    uart2SendData(3, (uint8_t *)ctr);
   }
 }

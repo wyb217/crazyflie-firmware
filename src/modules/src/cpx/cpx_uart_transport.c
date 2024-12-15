@@ -68,20 +68,23 @@ static xQueueHandle uartRxQueue;
 
 #define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
 
-typedef struct {
-    CPXRoutingPacked_t route;
-    uint8_t data[CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE];
+typedef struct
+{
+  CPXRoutingPacked_t route;
+  uint8_t data[CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE];
 } __attribute__((packed)) uartTransportPayload_t;
 
-typedef struct {
-    uint8_t start;
-    uint8_t payloadLength; // Excluding start and crc
-    union {
-        uartTransportPayload_t routablePayload;
-        uint8_t payload[CPX_UART_TRANSPORT_MTU];
-    };
+typedef struct
+{
+  uint8_t start;
+  uint8_t payloadLength; // Excluding start and crc
+  union
+  {
+    uartTransportPayload_t routablePayload;
+    uint8_t payload[CPX_UART_TRANSPORT_MTU];
+  };
 
-    uint8_t crcPlaceHolder; // Not actual position. CRC is added after the last byte of payload
+  uint8_t crcPlaceHolder; // Not actual position. CRC is added after the last byte of payload
 } __attribute__((packed)) uart_transport_packet_t;
 
 // Used when sending/receiving data on the UART
@@ -97,7 +100,7 @@ static EventGroupHandle_t evGroup;
 /* Used to signal that there are packets in the outgoing TX queue */
 #define ESP_TXQ_EVENT (1 << 2)
 /* Used to signal that TX/RX tasks should shut down */
-#define DEINIT_EVENT  (1 << 3)
+#define DEINIT_EVENT (1 << 3)
 /* Used to signal that RX task has shut down */
 #define RX_DEINIT_EVENT (1 << 4)
 /* Used to signal that TX task has shut down */
@@ -108,19 +111,22 @@ static bool shutdownTransport = false;
 
 static bool isInit = false;
 
-static uint8_t calcCrc(const uart_transport_packet_t* packet) {
-  const uint8_t* start = (const uint8_t*) packet;
-  const uint8_t* end = &packet->payload[packet->payloadLength];
+static uint8_t calcCrc(const uart_transport_packet_t *packet)
+{
+  const uint8_t *start = (const uint8_t *)packet;
+  const uint8_t *end = &packet->payload[packet->payloadLength];
 
   uint8_t crc = 0;
-  for (const uint8_t* p = start; p < end; p++) {
+  for (const uint8_t *p = start; p < end; p++)
+  {
     crc ^= *p;
   }
 
   return crc;
 }
 
-static void assemblePacket(const CPXPacket_t *packet, uart_transport_packet_t * txp) {
+static void assemblePacket(const CPXPacket_t *packet, uart_transport_packet_t *txp)
+{
   ASSERT((packet->route.destination >> 4) == 0);
   ASSERT((packet->route.source >> 4) == 0);
   ASSERT((packet->route.function >> 8) == 0);
@@ -146,9 +152,11 @@ static void CPX_UART_RX(void *param)
     do
     {
       uart2GetDataWithTimeout(1, &uartRxp.start, M2T(200));
+      // DEBUG_PRINT("Wait for start :%u", uartRxp.start);
     } while (uartRxp.start != 0xFF && shutdownTransport == false);
-
-    if (uartRxp.start == 0xFF) {
+    // DEBUG_PRINT("start");
+    if (uartRxp.start == 0xFF)
+    {
       uart2GetData(1, &uartRxp.payloadLength);
 
       if (uartRxp.payloadLength == 0)
@@ -157,12 +165,13 @@ static void CPX_UART_RX(void *param)
       }
       else
       {
-        uart2GetData(uartRxp.payloadLength, (uint8_t*) &uartRxp.payload);
+        uart2GetData(uartRxp.payloadLength, (uint8_t *)&uartRxp.payload);
 
         uint8_t crc;
         uart2GetData(1, &crc);
         ASSERT(crc == calcCrc(&uartRxp));
-        if (cpxCheckVersion(uartRxp.routablePayload.route.version)) {
+        if (cpxCheckVersion(uartRxp.routablePayload.route.version))
+        {
           xQueueSend(uartRxQueue, &uartRxp, portMAX_DELAY);
         }
         xEventGroupSetBits(evGroup, ESP_CTR_EVENT);
@@ -188,12 +197,19 @@ static void CPX_UART_TX(void *param)
   vTaskDelay(100);
 
   // Sync with ESP32 so both are in CTS
+  // do
+  // {
+  //   uart2SendData(sizeof(ctr), (uint8_t *)&ctr);
+  //   vTaskDelay(100);
+  //   DEBUG_PRINT("%u\t%u\n", ctr[0], ctr[1]);
+  //   evBits = xEventGroupGetBits(evGroup);
+  // } while ((evBits & ESP_CTS_EVENT) != ESP_CTS_EVENT && shutdownTransport == false);
   do
   {
     uart2SendData(sizeof(ctr), (uint8_t *)&ctr);
     vTaskDelay(100);
     evBits = xEventGroupGetBits(evGroup);
-  } while ((evBits & ESP_CTS_EVENT) != ESP_CTS_EVENT && shutdownTransport == false);
+  } while (1);
 
   while (shutdownTransport == false)
   {
@@ -230,7 +246,7 @@ static void CPX_UART_TX(void *param)
           uart2SendData(sizeof(ctr), (uint8_t *)&ctr);
         }
       } while ((evBits & ESP_CTS_EVENT) != ESP_CTS_EVENT);
-      uart2SendData((uint32_t) uartTxp.payloadLength + UART_META_LENGTH, (uint8_t *)&uartTxp);
+      uart2SendData((uint32_t)uartTxp.payloadLength + UART_META_LENGTH, (uint8_t *)&uartTxp);
     }
   }
 
@@ -238,61 +254,66 @@ static void CPX_UART_TX(void *param)
   vTaskDelete(NULL);
 }
 
-void cpxUARTTransportSend(const CPXRoutablePacket_t* packet) {
+void cpxUARTTransportSend(const CPXRoutablePacket_t *packet)
+{
   ASSERT(isInit == true && shutdownTransport == false);
   ASSERT(packet);
 
   xQueueSend(uartTxQueue, packet, portMAX_DELAY);
+
   xEventGroupSetBits(evGroup, ESP_TXQ_EVENT);
 }
 
-void cpxUARTTransportReceive(CPXRoutablePacket_t* packet) {
+void cpxUARTTransportReceive(CPXRoutablePacket_t *packet)
+{
   ASSERT(isInit == true && shutdownTransport == false);
   ASSERT(packet);
 
   static uart_transport_packet_t cpxRxp;
 
   xQueueReceive(uartRxQueue, &cpxRxp, portMAX_DELAY);
-
-  packet->dataLength = (uint32_t) cpxRxp.payloadLength - CPX_ROUTING_PACKED_SIZE;
+  DEBUG_PRINT("receive from queue");
+  packet->dataLength = (uint32_t)cpxRxp.payloadLength - CPX_ROUTING_PACKED_SIZE;
   packet->route.destination = cpxRxp.routablePayload.route.destination;
   packet->route.source = cpxRxp.routablePayload.route.source;
   packet->route.function = cpxRxp.routablePayload.route.function;
   packet->route.lastPacket = cpxRxp.routablePayload.route.lastPacket;
   memcpy(&packet->data, cpxRxp.routablePayload.data, packet->dataLength);
-
 }
 
-void cpxUARTTransportInit() {
+void cpxUARTTransportInit()
+{
   // There's no support for re-initializing the UART transport once it's
   // been de-initialized. This is not needed by the ESP bootloader use-case,
   // since the procedure will reset the Crazyflie after ESP has been bootloaded
-  ASSERT(shutdownTransport==false);
+  ASSERT(shutdownTransport == false);
 
   uartTxQueue = xQueueCreate(UART_TX_QUEUE_LENGTH, sizeof(CPXPacket_t));
   uartRxQueue = xQueueCreate(UART_RX_QUEUE_LENGTH, sizeof(uart_transport_packet_t));
 
   evGroup = xEventGroupCreate();
 
-  uart2Init(CONFIG_CPX_UART2_BAUDRATE);
+  uart2Init(115200);
 
   // Initialize task for the ESP while it's held in reset
   xTaskCreate(CPX_UART_RX, AIDECK_ESP_RX_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
+
   xTaskCreate(CPX_UART_TX, AIDECK_ESP_TX_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
 
   isInit = true;
 }
 
-void cpxUARTTransportDeinit() {
+void cpxUARTTransportDeinit()
+{
   shutdownTransport = true;
   // Send event to unlock TX
   xEventGroupSetBits(evGroup, DEINIT_EVENT);
   // Wait for RX/TX event shutdown
   xEventGroupWaitBits(evGroup,
                       TX_DEINIT_EVENT | RX_DEINIT_EVENT,
-                      pdTRUE,  // Clear bits before returning
+                      pdTRUE, // Clear bits before returning
                       pdTRUE, // Wait for all bits
                       portMAX_DELAY);
 }
