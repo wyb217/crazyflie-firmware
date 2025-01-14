@@ -42,7 +42,8 @@
 #include "cpx_internal_router.h"
 #include "cpx_uart_transport.h"
 
-typedef struct {
+typedef struct
+{
   CPXRoutablePacket_t txp;
 } RouteContext_t;
 
@@ -52,26 +53,29 @@ static CPXRoutablePacket_t internalRxBuf;
 static RouteContext_t uart_task_context;
 static CPXRoutablePacket_t uartRxBuf;
 
-typedef void (*Receiver_t)(CPXRoutablePacket_t* packet);
-typedef void (*Sender_t)(const CPXRoutablePacket_t* packet);
+typedef void (*Receiver_t)(CPXRoutablePacket_t *packet);
+typedef void (*Sender_t)(const CPXRoutablePacket_t *packet);
 
-static const int START_UP_UART_ROUTER_RUNNING = (1<<0);
-static const int START_UP_RADIO_ROUTER_RUNNING = (1<<1);
-static const int START_UP_INTERNAL_ROUTER_RUNNING = (1<<2);
+static const int START_UP_UART_ROUTER_RUNNING = (1 << 0);
+static const int START_UP_RADIO_ROUTER_RUNNING = (1 << 1);
+static const int START_UP_INTERNAL_ROUTER_RUNNING = (1 << 2);
 
 static EventGroupHandle_t startUpEventGroup;
 
-static void splitAndSend(const CPXRoutablePacket_t* rxp, RouteContext_t* context, Sender_t sender, const uint16_t mtu) {
-  CPXRoutablePacket_t* txp = &context->txp;
+static void splitAndSend(const CPXRoutablePacket_t *rxp, RouteContext_t *context, Sender_t sender, const uint16_t mtu)
+{
+  CPXRoutablePacket_t *txp = &context->txp;
 
   txp->route = rxp->route;
 
   uint16_t remainingToSend = rxp->dataLength;
-  const uint8_t* startOfDataToSend = rxp->data;
-  while (remainingToSend > 0) {
+  const uint8_t *startOfDataToSend = rxp->data;
+  while (remainingToSend > 0)
+  {
     uint16_t toSend = remainingToSend;
     bool lastPacket = rxp->route.lastPacket;
-    if (toSend > mtu) {
+    if (toSend > mtu)
+    {
       toSend = mtu;
       lastPacket = false;
     }
@@ -86,46 +90,54 @@ static void splitAndSend(const CPXRoutablePacket_t* rxp, RouteContext_t* context
   }
 }
 
-static void route(Receiver_t receive, CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* routerName) {
-  while(1) {
+static void route(Receiver_t receive, CPXRoutablePacket_t *rxp, RouteContext_t *context, const char *routerName)
+{
+  while (1)
+  {
     receive(rxp);
     // this should never fail, as it should be checked when the packet is received
     // however, double checking doesn't harm
-    if (cpxCheckVersion(rxp->route.version)) {
+    if (cpxCheckVersion(rxp->route.version))
+    {
       const CPXTarget_t source = rxp->route.source;
       const CPXTarget_t destination = rxp->route.destination;
       const uint16_t cpxDataLength = rxp->dataLength;
 
-      switch (destination) {
-        case CPX_T_WIFI_HOST:
-        case CPX_T_ESP32:
-        case CPX_T_GAP8:
-          //DEBUG_PRINT("%s [0x%02X] -> UART2 [0x%02X] (%u)\n", routerName, source, destination, cpxDataLength);
-          splitAndSend(rxp, context, cpxUARTTransportSend, CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
-          break;
-        case CPX_T_STM32:
-          //DEBUG_PRINT("%s [0x%02X] -> STM32 [0x%02X] (%u)\n", routerName, source, destination, cpxDataLength);
-          splitAndSend(rxp, context, cpxInternalRouterRouteIn, CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
-          break;
-        default:
-          DEBUG_PRINT("Cannot route from %s [0x%02X] to [0x%02X](%u)\n", routerName, source, destination, cpxDataLength);
-          break;
+      switch (destination)
+      {
+      case CPX_T_WIFI_HOST:
+      case CPX_T_ESP32:
+      case CPX_T_GAP8:
+
+        //  DEBUG_PRINT("%s [0x%02X] -> UART2 [0x%02X] (%u)\n", routerName, source, destination, cpxDataLength);
+        splitAndSend(rxp, context, cpxUARTTransportSend, CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+        break;
+      case CPX_T_STM32:
+        // DEBUG_PRINT("%s [0x%02X] -> STM32 [0x%02X] (%u)\n", routerName, source, destination, cpxDataLength);
+        splitAndSend(rxp, context, cpxInternalRouterRouteIn, CPX_UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+        break;
+      default:
+        DEBUG_PRINT("Cannot route from %s [0x%02X] to [0x%02X](%u)\n", routerName, source, destination, cpxDataLength);
+        break;
       }
     }
   }
 }
 
-static void router_from_uart(void* _param) {
+static void router_from_uart(void *_param)
+{
   xEventGroupSetBits(startUpEventGroup, START_UP_UART_ROUTER_RUNNING);
   route(cpxUARTTransportReceive, &uartRxBuf, &uart_task_context, "UART2");
 }
 
-static void router_from_internal(void* _param) {
+static void router_from_internal(void *_param)
+{
   xEventGroupSetBits(startUpEventGroup, START_UP_INTERNAL_ROUTER_RUNNING);
   route(cpxInternalRouterRouteOut, &internalRxBuf, &internal_task_context, "STM32");
 }
 
-void cpxExternalRouterInit() {
+void cpxExternalRouterInit()
+{
   startUpEventGroup = xEventGroupCreate();
   xEventGroupClearBits(startUpEventGroup, START_UP_UART_ROUTER_RUNNING | START_UP_INTERNAL_ROUTER_RUNNING);
 

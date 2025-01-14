@@ -66,7 +66,8 @@
         "uart_receive.h": "c",
         "debug.h": "c",
         "uart1.h": "c",
-        "console.h": "c"
+        "console.h": "c",
+        "cpx.h": "c"
     },
     "Codegeex.Chat.LanguagePreference": "中文",
     "Codegeex.Comment.LanguagePreference": "中文",
